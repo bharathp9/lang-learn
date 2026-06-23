@@ -2,6 +2,7 @@
 
 import { audioPlayer } from '../utils/audio.js';
 import { speechRecognizer } from '../utils/speech.js';
+import { sounds } from '../utils/sounds.js';
 
 export async function GamePage(app) {
     const { gameType, lessonId } = app.pageParams || {};
@@ -29,12 +30,12 @@ export async function GamePage(app) {
     if (words.length === 0) {
         return `
         <div class="min-h-screen bg-light flex items-center justify-center p-4">
-            <div class="bg-white rounded-3xl shadow-xl p-8 text-center max-w-md">
-                <div class="text-6xl mb-4">😅</div>
+            <div class="bg-white rounded-3xl shadow-xl p-8 text-center max-w-md bounce-in empty-state">
+                <div class="text-6xl mb-4">📚</div>
                 <h2 class="text-2xl font-bold text-dark mb-2">No words to practice!</h2>
                 <p class="text-gray-600 mb-6">Complete some lessons first or come back later for review.</p>
-                <button onclick="window.app.navigate('home')" 
-                    class="gradient-bg text-white font-bold py-3 px-8 rounded-xl">
+                <button onclick="window.exitGame()" 
+                    class="gradient-bg text-white font-bold py-3 px-8 rounded-xl btn-hover touch-target">
                     Go Home
                 </button>
             </div>
@@ -43,15 +44,15 @@ export async function GamePage(app) {
     }
 
     return `
-    <div class="min-h-screen bg-light" id="game-container">
+    <div class="min-h-screen bg-light no-select" id="game-container">
         <!-- Game Header -->
-        <header class="gradient-bg text-white p-4">
+        <header class="gradient-bg text-white p-3 p-md-4 shadow-lg">
             <div class="max-w-4xl mx-auto flex items-center justify-between">
-                <button onclick="window.exitGame()" class="p-2 bg-white/20 rounded-lg hover:bg-white/30">
+                <button onclick="window.exitGame()" class="p-2 bg-white/20 rounded-lg hover:bg-white/30 btn-hover touch-target">
                     ✕ Exit
                 </button>
                 <div class="text-center">
-                    <h2 class="font-bold text-lg">${getGameTitle(gameType)}</h2>
+                    <h2 class="font-bold text-lg game-title">${getGameTitle(gameType)}</h2>
                     <div class="text-sm opacity-90">Score: <span id="game-score">0</span></div>
                 </div>
                 <div class="text-right">
@@ -72,38 +73,41 @@ export async function GamePage(app) {
 
         <!-- Game Area -->
         <div class="max-w-4xl mx-auto p-4">
-            <div id="game-area" class="bg-white rounded-3xl shadow-xl p-6 min-h-[400px]">
+            <div id="game-area" class="bg-white rounded-3xl shadow-xl p-4 sm:p-6 min-h-[350px] sm:min-h-[400px]">
                 ${renderGameContent(gameType, words, 0)}
             </div>
         </div>
 
+        <!-- Score Popup Container -->
+        <div id="score-popups" class="fixed inset-0 pointer-events-none z-40"></div>
+
         <!-- Result Modal (hidden) -->
         <div id="result-modal" class="fixed inset-0 bg-black/50 flex items-center justify-center p-4 hidden z-50">
-            <div class="bg-white rounded-3xl shadow-2xl p-8 max-w-md w-full text-center bounce-in">
-                <div id="result-emoji" class="text-6xl mb-4">🎉</div>
+            <div class="bg-white rounded-3xl shadow-2xl p-6 sm:p-8 max-w-md w-full text-center bounce-in">
+                <div id="result-emoji" class="text-6xl mb-4 celebrate">🎉</div>
                 <h2 id="result-title" class="text-2xl font-bold text-dark mb-2">Great Job!</h2>
                 <p id="result-message" class="text-gray-600 mb-4">You earned 50 XP!</p>
-                <div id="result-stats" class="grid grid-cols-3 gap-4 mb-6">
-                    <div class="bg-gray-100 rounded-xl p-3">
+                <div id="result-stats" class="grid grid-cols-3 gap-2 sm:gap-4 mb-6">
+                    <div class="bg-gray-100 rounded-xl p-3 stat-card">
                         <div class="text-2xl font-bold text-primary" id="result-score">0</div>
                         <div class="text-xs text-gray-500">Score</div>
                     </div>
-                    <div class="bg-gray-100 rounded-xl p-3">
+                    <div class="bg-gray-100 rounded-xl p-3 stat-card">
                         <div class="text-2xl font-bold text-success" id="result-correct">0</div>
                         <div class="text-xs text-gray-500">Correct</div>
                     </div>
-                    <div class="bg-gray-100 rounded-xl p-3">
+                    <div class="bg-gray-100 rounded-xl p-3 stat-card">
                         <div class="text-2xl font-bold text-accent" id="result-xp">0</div>
                         <div class="text-xs text-gray-500">XP</div>
                     </div>
                 </div>
                 <div class="flex gap-3">
                     <button onclick="window.exitGame()" 
-                        class="flex-1 bg-gray-200 text-gray-700 font-bold py-3 rounded-xl hover:bg-gray-300">
+                        class="flex-1 bg-gray-200 text-gray-700 font-bold py-3 rounded-xl hover:bg-gray-300 btn-hover touch-target">
                         Home
                     </button>
                     <button onclick="window.restartGame()" 
-                        class="flex-1 gradient-bg text-white font-bold py-3 rounded-xl hover:opacity-90">
+                        class="flex-1 gradient-bg text-white font-bold py-3 rounded-xl btn-hover touch-target">
                         Play Again
                     </button>
                 </div>
@@ -153,20 +157,21 @@ function renderWordMatch(word, allWords, currentIndex) {
                      .sort(() => Math.random() - 0.5);
     
     return `
-    <div class="text-center">
+    <div class="text-center fade-in" id="word-match-container">
         <p class="text-gray-500 mb-4">What does this word mean?</p>
-        <div class="mb-8">
-            <div class="text-5xl font-bold text-primary mb-2">${word.telugu}</div>
-            <div class="text-xl text-gray-500">${word.transliteration}</div>
+        <div class="mb-6 sm:mb-8">
+            <div class="text-4xl sm:text-5xl font-bold text-primary mb-2 word-text">${word.telugu}</div>
+            <div class="text-lg sm:text-xl text-gray-500">${word.transliteration}</div>
             <button onclick="window.playCurrentWord()" 
-                class="mt-4 px-6 py-2 bg-secondary text-white rounded-full hover:bg-secondary/80 transition-all">
+                class="mt-4 px-6 py-2 bg-secondary text-white rounded-full btn-hover touch-target">
                 🔊 Listen
             </button>
         </div>
-        <div class="grid grid-cols-2 gap-4">
+        <div class="grid grid-cols-2 gap-3 sm:gap-4 game-grid">
             ${options.map((opt, i) => `
                 <button onclick="window.handleAnswer(${opt.correct}, this)" 
-                    class="word-option bg-gray-100 hover:bg-gray-200 rounded-2xl p-6 text-lg font-bold text-dark transition-all border-2 border-transparent">
+                    data-correct="${opt.correct}"
+                    class="word-option option-btn bg-gray-100 hover:bg-gray-200 rounded-2xl p-4 sm:p-6 text-base sm:text-lg font-bold text-dark transition-all border-2 border-transparent touch-target">
                     ${opt.text}
                 </button>
             `).join('')}
@@ -177,33 +182,34 @@ function renderWordMatch(word, allWords, currentIndex) {
 
 function renderListenRepeat(word) {
     return `
-    <div class="text-center">
+    <div class="text-center fade-in" id="listen-repeat-container">
         <p class="text-gray-500 mb-4">Listen and repeat the word!</p>
-        <div class="mb-8">
-            <div class="text-6xl mb-4">🔊</div>
+        <div class="mb-6 sm:mb-8">
+            <div class="text-5xl sm:text-6xl mb-4">🔊</div>
             <button onclick="window.playCurrentWord()" 
-                class="gradient-bg text-white font-bold py-4 px-8 rounded-2xl text-xl hover:opacity-90 pulse-glow">
+                class="gradient-bg text-white font-bold py-4 px-8 rounded-2xl text-xl btn-hover pulse-glow touch-target">
                 Play Sound
             </button>
         </div>
-        <div id="speaking-area" class="mb-8">
+        <div id="speaking-area" class="mb-6 sm:mb-8">
             <p class="text-gray-500 mb-4">Now speak the word:</p>
-            <button onclick="window.startSpeaking()" 
-                class="bg-success text-white font-bold py-4 px-8 rounded-2xl text-xl hover:opacity-90">
+            <button id="mic-btn" onclick="window.startSpeaking()" 
+                class="bg-success text-white font-bold py-4 px-8 rounded-2xl text-xl btn-hover mic-pulse touch-target">
                 🎤 Start Speaking
             </button>
             <div id="speaking-feedback" class="mt-4 hidden">
-                <div class="speaking-wave justify-center">
+                <div class="waveform justify-center mb-2">
                     <span></span><span></span><span></span><span></span><span></span>
+                    <span></span><span></span><span></span><span></span>
                 </div>
                 <p class="text-gray-500 mt-2">Listening...</p>
             </div>
         </div>
-        <div id="speak-result" class="hidden">
+        <div id="speak-result" class="hidden slide-up">
             <div class="text-4xl mb-2" id="speak-emoji"></div>
             <p class="text-lg font-bold" id="speak-text"></p>
             <button onclick="window.nextWord()" 
-                class="mt-4 gradient-bg text-white font-bold py-3 px-8 rounded-xl">
+                class="mt-4 gradient-bg text-white font-bold py-3 px-8 rounded-xl btn-hover touch-target">
                 Next Word →
             </button>
         </div>
@@ -224,9 +230,9 @@ function renderSpeedRound(word, allWords, currentIndex) {
                      .sort(() => Math.random() - 0.5);
     
     return `
-    <div class="text-center">
+    <div class="text-center fade-in" id="speed-round-container">
         <!-- Timer -->
-        <div class="mb-4 flex justify-center">
+        <div class="mb-4 flex justify-center relative">
             <svg width="60" height="60" class="transform -rotate-90">
                 <circle cx="30" cy="30" r="25" fill="none" stroke="#eee" stroke-width="6"/>
                 <circle id="timer-circle" cx="30" cy="30" r="25" fill="none" stroke="#FF6B35" stroke-width="6" 
@@ -238,12 +244,12 @@ function renderSpeedRound(word, allWords, currentIndex) {
         </div>
         
         <p class="text-gray-500 mb-2">Quick! What does this mean?</p>
-        <div class="text-5xl font-bold text-primary mb-6">${word.telugu}</div>
+        <div class="text-4xl sm:text-5xl font-bold text-primary mb-4 sm:mb-6 word-text">${word.telugu}</div>
         
-        <div class="grid grid-cols-2 gap-3">
+        <div class="grid grid-cols-2 gap-2 sm:gap-3 game-grid">
             ${options.map((opt, i) => `
                 <button onclick="window.handleSpeedAnswer(${opt.correct}, this)" 
-                    class="speed-option bg-gray-100 hover:bg-gray-200 rounded-xl p-4 text-base font-bold text-dark transition-all">
+                    class="speed-option option-btn bg-gray-100 hover:bg-gray-200 rounded-xl p-3 sm:p-4 text-sm sm:text-base font-bold text-dark transition-all touch-target">
                     ${opt.text}
                 </button>
             `).join('')}
@@ -263,6 +269,7 @@ window.gameState = {
     sessionId: null,
     timerInterval: null,
     timeLeft: 60,
+    streakCount: 0,
 };
 
 window.initGame = function(words, gameType) {
@@ -276,6 +283,7 @@ window.initGame = function(words, gameType) {
         sessionId: null,
         timerInterval: null,
         timeLeft: 60,
+        streakCount: 0,
     };
     
     if (gameType === 'speed-round') {
@@ -286,6 +294,7 @@ window.initGame = function(words, gameType) {
 window.playCurrentWord = async function() {
     const word = window.gameState.words[window.gameState.currentIndex];
     if (word) {
+        sounds.playTap();
         await audioPlayer.playWord(word);
     }
 };
@@ -298,18 +307,31 @@ window.handleAnswer = async function(correct, btnElement) {
     });
     
     if (correct) {
+        sounds.playCorrect();
         btnElement.classList.remove('bg-gray-100', 'border-transparent');
-        btnElement.classList.add('bg-success', 'text-white', 'border-success');
+        btnElement.classList.add('bg-success', 'text-white', 'border-success', 'pop');
         window.gameState.score += 10;
         window.gameState.xp += 10;
         window.gameState.correct++;
+        window.gameState.streakCount++;
+        
+        // Show score popup
+        window.showScorePopup(btnElement, '+10');
+        
+        // Streak sound
+        if (window.gameState.streakCount > 0 && window.gameState.streakCount % 5 === 0) {
+            setTimeout(() => sounds.playStreak(), 300);
+        }
     } else {
+        sounds.playWrong();
         btnElement.classList.remove('bg-gray-100', 'border-transparent');
-        btnElement.classList.add('bg-red-500', 'text-white');
+        btnElement.classList.add('bg-red-500', 'text-white', 'shake');
+        window.gameState.streakCount = 0;
+        
         // Highlight correct answer
         buttons.forEach(btn => {
             if (btn.dataset.correct === 'true') {
-                btn.classList.add('bg-success', 'text-white');
+                btn.classList.add('bg-success', 'text-white', 'pop');
             }
         });
     }
@@ -326,14 +348,17 @@ window.handleAnswer = async function(correct, btnElement) {
         } else {
             window.renderNextWord();
         }
-    }, 1000);
+    }, 1200);
 };
 
 window.startSpeaking = async function() {
     const feedback = document.getElementById('speaking-feedback');
     const result = document.getElementById('speak-result');
+    const micBtn = document.getElementById('mic-btn');
+    
     feedback.classList.remove('hidden');
     result.classList.add('hidden');
+    if (micBtn) micBtn.classList.add('hidden');
     
     try {
         const word = window.gameState.words[window.gameState.currentIndex];
@@ -343,17 +368,21 @@ window.startSpeaking = async function() {
         result.classList.remove('hidden');
         
         if (recognitionResult.success) {
+            sounds.playCorrect();
             document.getElementById('speak-emoji').textContent = '🎉';
             document.getElementById('speak-text').textContent = 'Great pronunciation!';
             document.getElementById('speak-text').className = 'text-lg font-bold text-success';
             window.gameState.score += 15;
             window.gameState.xp += 15;
             window.gameState.correct++;
+            window.gameState.streakCount++;
         } else {
+            sounds.playWrong();
             document.getElementById('speak-emoji').textContent = '😊';
             document.getElementById('speak-text').textContent = `You said: "${recognitionResult.transcript}" - Keep practicing!`;
             document.getElementById('speak-text').className = 'text-lg font-bold text-accent';
             window.gameState.xp += 5;
+            window.gameState.streakCount = 0;
         }
         
         document.getElementById('game-score').textContent = window.gameState.score;
@@ -400,8 +429,16 @@ window.startSpeedTimer = function() {
         const offset = 283 - (283 * window.gameState.timeLeft / 60);
         timerCircle.style.strokeDashoffset = offset;
         
+        // Urgency effects
+        if (window.gameState.timeLeft <= 10) {
+            timerText.classList.add('timer-urgent');
+            timerCircle.style.stroke = '#dc2626';
+            sounds.playTick();
+        }
+        
         if (window.gameState.timeLeft <= 0) {
             clearInterval(window.gameState.timerInterval);
+            sounds.playTimeUp();
             window.showResults();
         }
     }, 1000);
@@ -409,12 +446,17 @@ window.startSpeedTimer = function() {
 
 window.handleSpeedAnswer = function(correct, btn) {
     if (correct) {
-        btn.classList.add('bg-success', 'text-white');
+        sounds.playCorrect();
+        btn.classList.add('bg-success', 'text-white', 'pop');
         window.gameState.score += 10;
         window.gameState.xp += 10;
         window.gameState.correct++;
+        window.gameState.streakCount++;
+        window.showScorePopup(btn, '+10');
     } else {
-        btn.classList.add('bg-red-500', 'text-white');
+        sounds.playWrong();
+        btn.classList.add('bg-red-500', 'text-white', 'shake');
+        window.gameState.streakCount = 0;
     }
     
     document.getElementById('game-score').textContent = window.gameState.score;
@@ -427,7 +469,22 @@ window.handleSpeedAnswer = function(correct, btn) {
         } else {
             window.showResults();
         }
-    }, 500);
+    }, 600);
+};
+
+window.showScorePopup = function(element, text) {
+    const container = document.getElementById('score-popups');
+    if (!container || !element) return;
+    
+    const rect = element.getBoundingClientRect();
+    const popup = document.createElement('div');
+    popup.className = 'score-popup fixed text-xl font-bold text-success z-50';
+    popup.style.left = `${rect.left + rect.width / 2 - 20}px`;
+    popup.style.top = `${rect.top}px`;
+    popup.textContent = text;
+    container.appendChild(popup);
+    
+    setTimeout(() => popup.remove(), 800);
 };
 
 window.showResults = function() {
@@ -442,13 +499,58 @@ window.showResults = function() {
     document.getElementById('result-correct').textContent = window.gameState.correct;
     document.getElementById('result-xp').textContent = window.gameState.xp;
     
+    const accuracy = window.gameState.correct / window.gameState.words.length;
+    
+    // Set result message based on performance
+    const resultEmoji = document.getElementById('result-emoji');
+    const resultTitle = document.getElementById('result-title');
+    const resultMessage = document.getElementById('result-message');
+    
+    if (accuracy >= 0.9) {
+        resultEmoji.textContent = '🏆';
+        resultTitle.textContent = 'Amazing!';
+        resultMessage.textContent = `Perfect score! You earned ${window.gameState.xp} XP!`;
+        sounds.playLevelUp();
+    } else if (accuracy >= 0.7) {
+        resultEmoji.textContent = '🎉';
+        resultTitle.textContent = 'Great Job!';
+        resultMessage.textContent = `You earned ${window.gameState.xp} XP!`;
+        sounds.playCorrect();
+    } else if (accuracy >= 0.5) {
+        resultEmoji.textContent = '👍';
+        resultTitle.textContent = 'Good Effort!';
+        resultMessage.textContent = `You earned ${window.gameState.xp} XP. Keep practicing!`;
+    } else {
+        resultEmoji.textContent = '💪';
+        resultTitle.textContent = 'Keep Going!';
+        resultMessage.textContent = `Practice makes perfect! You earned ${window.gameState.xp} XP.`;
+    }
+    
     // Confetti for good performance
-    if (window.gameState.correct >= window.gameState.words.length * 0.7) {
+    if (accuracy >= 0.7) {
+        const particleCount = accuracy >= 0.9 ? 200 : 100;
         confetti({
-            particleCount: 100,
+            particleCount: particleCount,
             spread: 70,
             origin: { y: 0.6 },
         });
+        
+        if (accuracy >= 0.9) {
+            setTimeout(() => {
+                confetti({
+                    particleCount: 50,
+                    angle: 60,
+                    spread: 55,
+                    origin: { x: 0 },
+                });
+                confetti({
+                    particleCount: 50,
+                    angle: 120,
+                    spread: 55,
+                    origin: { x: 1 },
+                });
+            }, 300);
+        }
     }
     
     // Submit results to backend
@@ -475,10 +577,12 @@ window.exitGame = function() {
     if (window.gameState.timerInterval) {
         clearInterval(window.gameState.timerInterval);
     }
+    sounds.playTap();
     window.app.navigate('home');
 };
 
 window.restartGame = function() {
+    sounds.playTap();
     document.getElementById('result-modal').classList.add('hidden');
     window.initGame(window.gameState.words, window.gameState.gameType);
     window.renderNextWord();
